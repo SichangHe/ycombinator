@@ -1,33 +1,46 @@
-fn leak_ref<T>(x: T) -> &'static mut T {
+//! # Y combinator
+
+/// Heap allocate `x` and return a reference to it.
+/// Never deallocate the memory.
+pub fn leak<T>(x: T) -> &'static mut T {
     let b = Box::new(x);
     Box::leak(b)
 }
 
-struct P<F>(&'static dyn Fn(&'static P<F>) -> F)
-where
-    F: 'static;
+struct P<F: 'static>(&'static dyn Fn(&'static P<F>) -> F);
 
-impl<F> P<F>
-where
-    F: 'static,
-{
+impl<F> P<F> {
     fn call(&self, other: &'static Self) -> F {
         self.0(other)
     }
 }
 
+/// # The Y combinator
+///
+/// The passed-in function `x` has to be `'static`, which means that they could
+/// either be static functions declared in the global scope or closures that are
+/// leaked using `Box::leak`.
+///
+/// ## Limitations
+///
+/// - This function makes 4 heap allocations of closures and never deallocates
+///     (therefore leaks) them.
+/// - The passed-in function `x` must take `'static` input `I` and `'static`
+///     output `O`.
 #[allow(clippy::redundant_closure_call)]
-pub fn y<X, F, T>(x: &'static X) -> F
+pub fn y<X, F, I, O>(x: &'static X) -> F
 where
-    X: Fn(&'static dyn Fn(T) -> T) -> F,
-    F: 'static + Fn(T) -> T,
-    T: 'static,
+    X: Fn(&'static dyn Fn(I) -> O) -> F,
+    F: 'static + Fn(I) -> O,
+    I: 'static,
+    O: 'static,
 {
-    (|proc: &'static P<F>| x(leak_ref(move |arg: T| (proc.call(proc))(arg))))(leak_ref(P(
-        leak_ref(move |proc: &'static P<F>| x(leak_ref(move |arg: T| (proc.call(proc))(arg)))),
-    )))
+    (|proc: &'static P<F>| x(leak(move |arg| (proc.call(proc))(arg))))(leak(P(leak(
+        move |proc: &'static P<F>| x(leak(move |arg| (proc.call(proc))(arg))),
+    ))))
 }
 
+/// Function used to create the factorial function using the Y combinator.
 pub fn f(func_arg: &dyn Fn(usize) -> usize) -> impl '_ + Fn(usize) -> usize {
     move |n| if n == 0 { 1 } else { n * func_arg(n - 1) }
 }
