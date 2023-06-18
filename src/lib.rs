@@ -17,13 +17,14 @@ where
 }
 
 #[allow(clippy::redundant_closure_call)]
-pub fn y<X, F>(x: &'static X) -> F
+pub fn y<X, F, T>(x: &'static X) -> F
 where
-    X: Fn(&'static dyn Fn(usize) -> usize) -> F,
-    F: 'static + Fn(usize) -> usize,
+    X: Fn(&'static dyn Fn(T) -> T) -> F,
+    F: 'static + Fn(T) -> T,
+    T: 'static,
 {
-    (|proc: &'static P<F>| x(leak_ref(move |arg: usize| (proc.call(proc))(arg))))(leak_ref(P(
-        leak_ref(move |proc: &'static P<F>| x(leak_ref(move |arg: usize| (proc.call(proc))(arg)))),
+    (|proc: &'static P<F>| x(leak_ref(move |arg: T| (proc.call(proc))(arg))))(leak_ref(P(
+        leak_ref(move |proc: &'static P<F>| x(leak_ref(move |arg: T| (proc.call(proc))(arg)))),
     )))
 }
 
